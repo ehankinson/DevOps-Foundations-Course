@@ -1,38 +1,70 @@
-# TODO: Define stages for your pipeline
+# Define stages for your pipeline
 stages:
+  - install-dependencies
+  - build
+  - test
+  - dockerize
+  - deploy
 
-# TODO: Define variables (if needed)
+# Define global variables (optional)
 variables:
+  FRONTEND_IMAGE: registry.gitlab.com/<your-namespace>/<project-name>/frontend
+  BACKEND_IMAGE: registry.gitlab.com/<your-namespace>/<project-name>/backend
+  DOCKER_DRIVER: overlay2  # Needed for Docker-in-Docker
 
-# TODO: Define a job for building the frontend
+# Frontend job: Install dependencies and build React app
 frontend-job:
-  stage: # TODO: Specify stage
-  image: # TODO: Specify Node.js image
+  stage: install-dependencies
+  image: node:14-alpine
   script:
-    # TODO: Install dependencies
-    # TODO: Build the React app
+    - echo "Installing dependencies for frontend..."
+    - cd frontend
+    - npm install
+    - echo "Building the React app..."
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/build/  # Save the built React app for later jobs
+  only:
+    - main
 
-# TODO: Define a job for building and testing the backend
+# Backend job: Install dependencies and test Flask API
 backend-job:
-  stage: # TODO: Specify stage
-  image: # TODO: Specify Python image
+  stage: test
+  image: python:3.9-slim
   script:
-    # TODO: Install dependencies
-    # TODO: Run tests
+    - echo "Installing dependencies for backend..."
+    - cd backend
+    - pip install -r requirements.txt
+    - echo "Running backend tests..."
+    - pytest
+  only:
+    - main
 
-# TODO: Define a job for building Docker images
+# Build Docker images for frontend and backend
 docker-build:
-  stage: # TODO: Specify stage
+  stage: dockerize
   image: docker:latest
   services:
     - docker:dind
   script:
-    # TODO: Build frontend Docker image
-    # TODO: Build backend Docker image
-    # TODO: Push images to Docker Hub (if on main branch)
+    - echo "Building Docker images..."
+    - docker build -t $FRONTEND_IMAGE:latest ./frontend
+    - docker build -t $BACKEND_IMAGE:latest ./backend
+    - if [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        echo "Pushing images to Docker registry...";
+        echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY;
+        docker push $FRONTEND_IMAGE:latest;
+        docker push $BACKEND_IMAGE:latest;
+      fi
+  only:
+    - main
 
-# OPTIONAL: Define a deployment job (if applicable)
+# OPTIONAL: Deployment job
 deploy:
-  stage: # TODO: Specify stage
+  stage: deploy
   script:
-    # TODO: Add deployment steps
+    - echo "Deploying application..."
+    # Add your deployment steps here (e.g., SSH into server and deploy images)
+  only:
+    - tags
